@@ -5,6 +5,9 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 [![Hex.pm](https://img.shields.io/hexpm/v/neo4j_ex.svg)](https://hex.pm/packages/neo4j_ex)
 [![Documentation](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/neo4j_ex)
 [![License](https://img.shields.io/hexpm/l/neo4j_ex.svg)](LICENSE)
+[![Beta](https://img.shields.io/badge/status-beta-orange.svg)](https://github.com/Maxino22/neo4j_ex)
+
+> **⚠️ Beta Release**: This driver is currently in beta. While core functionality is stable and tested, some edge cases and advanced features are still being refined. Please report any issues you encounter to help us improve the driver.
 
 ## Features
 
@@ -18,6 +21,12 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 - **Error Handling**: Comprehensive error handling and reporting
 - **Pure Elixir**: No external dependencies, built entirely in Elixir
 
+### Current Limitations
+
+- **No Streaming Support**: Results are currently loaded entirely into memory. Streaming support for large result sets is planned for future releases.
+- **Single Connection per Session**: Each session uses a single connection. Connection pooling is planned for future releases.
+- **Basic Type Support**: Advanced Neo4j types (Point, Duration, etc.) are not yet fully supported.
+
 ## Installation
 
 Add `neo4j_ex` to your list of dependencies in `mix.exs`:
@@ -25,7 +34,7 @@ Add `neo4j_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:neo4j_ex, "~> 0.1.0"}
+    {:neo4j_ex, "~> 0.1.1"}
   ]
 end
 ```
@@ -433,7 +442,10 @@ Neo4jEx (Public API)
 - [x] **Week 2**: PackStream serialization and basic messaging
 - [x] **Week 3**: Query execution and result parsing
 - [x] **Week 4**: Polish, testing, and documentation
-- [ ] **Future**: Connection pooling, clustering support, advanced types
+- [ ] **v0.2.0**: Result streaming support for large datasets
+- [ ] **v0.3.0**: Connection pooling and improved performance
+- [ ] **v0.4.0**: Clustering support and routing
+- [ ] **v1.0.0**: Advanced Neo4j types (Point, Duration, etc.) and production readiness
 
 ## Contributing
 

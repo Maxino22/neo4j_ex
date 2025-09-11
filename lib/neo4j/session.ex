@@ -49,9 +49,9 @@ defmodule Neo4j.Session do
 
     with :ok <- send_run_message(session, query, params),
          {:ok, run_response} <- receive_message(session.socket, timeout),
-         {:success, _metadata} <- Messages.parse_response(run_response),
+         {:success, metadata} <- Messages.parse_response(run_response),
          :ok <- send_pull_message(session),
-         {:ok, results} <- collect_results(session.socket, timeout) do
+         {:ok, results} <- collect_results(session.socket, timeout, metadata["fields"]) do
       {:ok, results}
     else
       {:failure, metadata} ->
@@ -153,21 +153,20 @@ defmodule Neo4j.Session do
     Socket.send(session.socket, Messages.encode_message(pull_msg))
   end
 
-  defp collect_results(socket, timeout, acc \\ []) do
+  defp collect_results(socket, timeout, fields, acc \\ []) do
     case receive_message(socket, timeout) do
       {:ok, response} ->
         case Messages.parse_response(response) do
           {:record, values} ->
-            record = Record.new(values)
-            collect_results(socket, timeout, [record | acc])
+            record = Record.new(values, fields)
+            # Convert record to map for easier access
+            record_map = Record.to_map(record)
+            collect_results(socket, timeout, fields, [record_map | acc])
 
           {:success, metadata} ->
-            summary = Summary.new(metadata)
-            results = %{
-              records: Enum.reverse(acc),
-              summary: summary
-            }
-            {:ok, results}
+            _summary = Summary.new(metadata)
+            # Return just the list of record maps for simplicity
+            {:ok, Enum.reverse(acc)}
 
           {:failure, metadata} ->
             {:error, {:query_execution_failed, metadata["message"]}}

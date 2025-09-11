@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-01-11
+
+### Fixed
+- **Authentication Timeout Issues**: Fixed hardcoded 5-second timeout in `receive_message/3` function that was causing authentication failures. Increased timeout to 15 seconds to match connection timeout settings.
+- **Compiler Warnings**: Removed all compiler warnings by cleaning up unused module attributes in PackStream module and unused variables in test files.
+- **Result Handling**: Enhanced session result processing to properly handle field names from RUN response metadata, providing user-friendly map results instead of complex Record structures.
+
+### Improved
+- **Error Handling**: Better timeout handling throughout the driver with more descriptive error messages.
+- **Documentation**: Added beta release badge and comprehensive documentation of current limitations including lack of streaming support.
+- **Test Suite**: All 29 tests now pass without any warnings, providing a clean development experience.
+
+### Added
+- **Beta Release Documentation**: Added clear beta status indicators and roadmap for future versions.
+- **Limitations Documentation**: Documented current limitations including no streaming support, single connection per session, and basic type support.
+- **Version Roadmap**: Added detailed roadmap with specific features planned for v0.2.0 (streaming), v0.3.0 (connection pooling), v0.4.0 (clustering), and v1.0.0 (production readiness).
+
+### Technical Details
+- Driver timeout increased from 5s to 15s for better reliability
+- Session module now properly extracts and maps field names from query responses
+- PackStream module cleaned up unused binary markers (reserved for future use)
+- Enhanced result collection with proper field name handling
+
 ## [0.1.0] - 2025-01-11
 
 ### Added
@@ -191,5 +214,6 @@ This release represents the completion of the initial 4-week development roadmap
 
 The driver is now production-ready for basic Neo4j operations and provides a solid foundation for future enhancements.
 
-[Unreleased]: https://github.com/Maxino22/neo4j_ex/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Maxino22/neo4j_ex/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Maxino22/neo4j_ex/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Maxino22/neo4j_ex/releases/tag/v0.1.0

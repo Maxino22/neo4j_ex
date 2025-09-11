@@ -326,7 +326,7 @@ defmodule Neo4j.Driver do
     end
   end
 
-  defp receive_message(socket, buffer \\ <<>>, timeout \\ 5000) do
+  defp receive_message(socket, buffer \\ <<>>, timeout \\ 15000) do
     case Socket.recv(socket, timeout: timeout) do
       {:ok, data} ->
         full_data = <<buffer::binary, data::binary>>
