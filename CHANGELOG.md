@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2-rc1] - 2025-01-11
+
+### Fixed
+- **Message Buffering Issues**: Fixed critical bug where multiple Bolt protocol messages arriving in a single network packet were not properly handled, causing timeouts in both session queries and transactions. Implemented proper message buffering system using process dictionary to maintain unprocessed data between message receives.
+- **Transaction Result Handling**: Fixed transaction result format to properly wrap results in `{:ok, result}` tuples for successful transactions, matching expected API contract.
+- **Session and Transaction Compatibility**: Both session and transaction modules now properly handle the Bolt protocol's message sequencing, resolving timeout issues that prevented successful query execution.
+
+### Improved
+- **Robust Message Processing**: Enhanced message handling to properly process all messages in network packets, not just the first one, ensuring reliable communication with Neo4j server.
+- **Resource Management**: Added proper cleanup of message buffers when operations complete or fail, preventing memory leaks.
+
+### Technical Details
+- Implemented message buffering system in `Neo4j.Session` and `Neo4j.Transaction` modules
+- Modified `receive_message/3` functions to maintain per-socket message buffers using `:erlang.get/1` and `:erlang.put/2`
+- Enhanced message decoding to properly handle remaining data after successful message parsing
+- Fixed transaction result wrapping to return `{:ok, result}` format
+- Updated result structures to use proper `Neo4j.Result.Record` and `Neo4j.Result.Summary` structs
+
+
 ## [0.1.1] - 2025-01-11
 
 ### Fixed

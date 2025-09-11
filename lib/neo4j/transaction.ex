@@ -52,7 +52,7 @@ defmodule Neo4j.Transaction do
       try do
         result = fun.(tx)
         case commit(tx) do
-          :ok -> result
+          :ok -> {:ok, result}
           {:error, reason} -> {:error, reason}
         end
       rescue
@@ -225,20 +225,65 @@ defmodule Neo4j.Transaction do
   end
 
   defp receive_message(socket, timeout, buffer \\ <<>>) do
-    case Socket.recv(socket, timeout: timeout) do
-      {:ok, data} ->
-        full_data = <<buffer::binary, data::binary>>
+    # Get any buffered data for this socket
+    buffered_data = case :erlang.get({:message_buffer, socket}) do
+      :undefined -> <<>>
+      data -> data
+    end
+    
+    # Combine any buffered data with the new buffer
+    combined_buffer = <<buffered_data::binary, buffer::binary>>
+    
+    # Try to decode a message from the combined buffer
+    case Messages.decode_message(combined_buffer) do
+      {:ok, message, remaining} ->
+        # We successfully decoded a message
+        # Store any remaining data for next time
+        if byte_size(remaining) > 0 do
+          :erlang.put({:message_buffer, socket}, remaining)
+        else
+          :erlang.erase({:message_buffer, socket})
+        end
+        {:ok, message}
+        
+      {:incomplete} ->
+        # Not enough data to decode a message, read from socket
+        case Socket.recv(socket, timeout: timeout) do
+          {:ok, data} ->
+            full_data = <<combined_buffer::binary, data::binary>>
+            
+            # Try to decode again with the new data
+            case Messages.decode_message(full_data) do
+              {:ok, message, remaining} ->
+                # We successfully decoded a message
+                # Store any remaining data for next time
+                if byte_size(remaining) > 0 do
+                  :erlang.put({:message_buffer, socket}, remaining)
+                else
+                  :erlang.erase({:message_buffer, socket})
+                end
+                {:ok, message}
+                
+              {:incomplete} ->
+                # Still not enough data, store what we have and recurse
+                :erlang.put({:message_buffer, socket}, full_data)
+                receive_message(socket, timeout, <<>>)
+                
+              {:error, reason} ->
+                # Error decoding message
+                :erlang.erase({:message_buffer, socket})
+                {:error, reason}
+            end
 
-        case Messages.decode_message(full_data) do
-          {:ok, message, _rest} ->
-            {:ok, message}
-          {:incomplete} ->
-            receive_message(socket, timeout, full_data)
           {:error, reason} ->
+            # Error reading from socket
+            :erlang.erase({:message_buffer, socket})
             {:error, reason}
         end
-
+        
       {:error, reason} ->
+        # Error decoding message
+        :erlang.erase({:message_buffer, socket})
         {:error, reason}
     end
   end

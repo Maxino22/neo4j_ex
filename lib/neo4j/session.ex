@@ -21,7 +21,7 @@ defmodule Neo4j.Session do
 
   alias Neo4j.Connection.Socket
   alias Neo4j.Protocol.Messages
-  alias Neo4j.Result.{Record, Summary}
+  alias Neo4j.Result.Record
 
   @doc """
   Executes a Cypher query in the session.
@@ -44,21 +44,54 @@ defmodule Neo4j.Session do
       {:ok, results} = Neo4j.Session.run(session, "MATCH (n:Person) RETURN n.name")
       {:ok, results} = Neo4j.Session.run(session, "CREATE (p:Person {name: $name})", %{name: "Alice"})
   """
-  def run(session, query, params \\ %{}, opts \\ []) do
+  def run(session, query, params, opts) do
     timeout = Keyword.get(opts, :timeout, session.config.query_timeout)
 
-    with :ok <- send_run_message(session, query, params),
+    # Clear any existing buffer for this socket
+    :erlang.erase({:message_buffer, session.socket})
+
+    # Send RUN message
+    run_msg = Messages.run(query, params, %{})
+    encoded_run = Messages.encode_message(run_msg)
+
+    with :ok <- Socket.send(session.socket, encoded_run),
          {:ok, run_response} <- receive_message(session.socket, timeout),
-         {:success, metadata} <- Messages.parse_response(run_response),
-         :ok <- send_pull_message(session),
-         {:ok, results} <- collect_results(session.socket, timeout, metadata["fields"]) do
-      {:ok, results}
+         {:success, metadata} <- Messages.parse_response(run_response) do
+
+      # Send PULL message
+      pull_msg = Messages.pull(%{"n" => -1})
+      encoded_pull = Messages.encode_message(pull_msg)
+
+      with :ok <- Socket.send(session.socket, encoded_pull),
+           {:ok, records} <- collect_results(session.socket, timeout, metadata["fields"]) do
+        # Clear the buffer when done
+        :erlang.erase({:message_buffer, session.socket})
+        # Return results in the expected format
+        {:ok, %{records: records}}
+      else
+        {:error, reason} ->
+          # Clear the buffer on error
+          :erlang.erase({:message_buffer, session.socket})
+          {:error, reason}
+      end
     else
       {:failure, metadata} ->
+        # Clear the buffer on failure
+        :erlang.erase({:message_buffer, session.socket})
         {:error, {:query_failed, metadata["message"]}}
       {:error, reason} ->
+        # Clear the buffer on error
+        :erlang.erase({:message_buffer, session.socket})
         {:error, reason}
     end
+  end
+
+  def run(session, query) do
+    run(session, query, %{}, [])
+  end
+
+  def run(session, query, params) do
+    run(session, query, params, [])
   end
 
   @doc """
@@ -81,7 +114,10 @@ defmodule Neo4j.Session do
       {:ok, tx} = Neo4j.Session.begin_transaction(session)
       {:ok, tx} = Neo4j.Session.begin_transaction(session, mode: "w", timeout: 30_000)
   """
-  def begin_transaction(session, opts \\ []) do
+  def begin_transaction(session, opts) do
+    # Clear any existing buffer for this socket
+    :erlang.erase({:message_buffer, session.socket})
+
     metadata = build_transaction_metadata(opts)
     timeout = Keyword.get(opts, :timeout, session.config.query_timeout)
 
@@ -105,6 +141,10 @@ defmodule Neo4j.Session do
     end
   end
 
+  def begin_transaction(session) do
+    begin_transaction(session, [])
+  end
+
   @doc """
   Closes the session and releases its connection.
 
@@ -116,6 +156,9 @@ defmodule Neo4j.Session do
       Neo4j.Session.close(session)
   """
   def close(session) do
+    # Clear any existing buffer for this socket
+    :erlang.erase({:message_buffer, session.socket})
+
     # Send GOODBYE message
     goodbye_msg = Messages.goodbye()
     Socket.send(session.socket, Messages.encode_message(goodbye_msg))
@@ -143,29 +186,21 @@ defmodule Neo4j.Session do
 
   # Private Functions
 
-  defp send_run_message(session, query, params) do
-    run_msg = Messages.run(query, params, %{})
-    Socket.send(session.socket, Messages.encode_message(run_msg))
+  defp collect_results(socket, timeout, fields) do
+    collect_results(socket, timeout, fields, [])
   end
 
-  defp send_pull_message(session) do
-    pull_msg = Messages.pull(%{"n" => -1})  # Pull all records
-    Socket.send(session.socket, Messages.encode_message(pull_msg))
-  end
-
-  defp collect_results(socket, timeout, fields, acc \\ []) do
+  defp collect_results(socket, timeout, fields, acc) do
     case receive_message(socket, timeout) do
       {:ok, response} ->
         case Messages.parse_response(response) do
           {:record, values} ->
+            # Create a Record struct
             record = Record.new(values, fields)
-            # Convert record to map for easier access
-            record_map = Record.to_map(record)
-            collect_results(socket, timeout, fields, [record_map | acc])
+            collect_results(socket, timeout, fields, [record | acc])
 
-          {:success, metadata} ->
-            _summary = Summary.new(metadata)
-            # Return just the list of record maps for simplicity
+          {:success, _metadata} ->
+            # Return just the list of record structs
             {:ok, Enum.reverse(acc)}
 
           {:failure, metadata} ->
@@ -181,20 +216,65 @@ defmodule Neo4j.Session do
   end
 
   defp receive_message(socket, timeout, buffer \\ <<>>) do
-    case Socket.recv(socket, timeout: timeout) do
-      {:ok, data} ->
-        full_data = <<buffer::binary, data::binary>>
+    # Get any buffered data for this socket
+    buffered_data = case :erlang.get({:message_buffer, socket}) do
+      :undefined -> <<>>
+      data -> data
+    end
 
-        case Messages.decode_message(full_data) do
-          {:ok, message, _rest} ->
-            {:ok, message}
-          {:incomplete} ->
-            receive_message(socket, timeout, full_data)
+    # Combine any buffered data with the new buffer
+    combined_buffer = <<buffered_data::binary, buffer::binary>>
+
+    # Try to decode a message from the combined buffer
+    case Messages.decode_message(combined_buffer) do
+      {:ok, message, remaining} ->
+        # We successfully decoded a message
+        # Store any remaining data for next time
+        if byte_size(remaining) > 0 do
+          :erlang.put({:message_buffer, socket}, remaining)
+        else
+          :erlang.erase({:message_buffer, socket})
+        end
+        {:ok, message}
+
+      {:incomplete} ->
+        # Not enough data to decode a message, read from socket
+        case Socket.recv(socket, timeout: timeout) do
+          {:ok, data} ->
+            full_data = <<combined_buffer::binary, data::binary>>
+
+            # Try to decode again with the new data
+            case Messages.decode_message(full_data) do
+              {:ok, message, remaining} ->
+                # We successfully decoded a message
+                # Store any remaining data for next time
+                if byte_size(remaining) > 0 do
+                  :erlang.put({:message_buffer, socket}, remaining)
+                else
+                  :erlang.erase({:message_buffer, socket})
+                end
+                {:ok, message}
+
+              {:incomplete} ->
+                # Still not enough data, store what we have and recurse
+                :erlang.put({:message_buffer, socket}, full_data)
+                receive_message(socket, timeout, <<>>)
+
+              {:error, reason} ->
+                # Error decoding message
+                :erlang.erase({:message_buffer, socket})
+                {:error, reason}
+            end
+
           {:error, reason} ->
+            # Error reading from socket
+            :erlang.erase({:message_buffer, socket})
             {:error, reason}
         end
 
       {:error, reason} ->
+        # Error decoding message
+        :erlang.erase({:message_buffer, socket})
         {:error, reason}
     end
   end
