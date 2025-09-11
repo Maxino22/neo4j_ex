@@ -1,0 +1,464 @@
+# Neo4jEx
+
+A pure Elixir driver for Neo4j graph database using the Bolt protocol.
+
+[![Hex.pm](https://img.shields.io/hexpm/v/neo4j_ex.svg)](https://hex.pm/packages/neo4j_ex)
+[![Documentation](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/neo4j_ex)
+[![License](https://img.shields.io/hexpm/l/neo4j_ex.svg)](LICENSE)
+
+## Features
+
+- **Full Bolt Protocol Support**: Complete implementation of Neo4j's Bolt protocol v5.x
+- **Authentication**: Support for basic authentication and no-auth scenarios
+- **Connection Management**: Automatic connection handling and cleanup
+- **Query Execution**: Simple query execution with parameter support
+- **Transactions**: Full transaction support with automatic commit/rollback
+- **Sessions**: Session-based query execution for better resource management
+- **Type Safety**: Proper handling of Neo4j data types and PackStream serialization
+- **Error Handling**: Comprehensive error handling and reporting
+- **Pure Elixir**: No external dependencies, built entirely in Elixir
+
+## Installation
+
+Add `neo4j_ex` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:neo4j_ex, "~> 0.1.0"}
+  ]
+end
+```
+
+Then run:
+
+```bash
+mix deps.get
+```
+
+## Quick Start
+
+```elixir
+# Start a driver
+{:ok, driver} = Neo4jEx.start_link("bolt://localhost:7687",
+  auth: {"neo4j", "password"})
+
+# Execute a simple query
+{:ok, results} = Neo4jEx.run(driver, "MATCH (n:Person) RETURN n.name LIMIT 10")
+
+# Process results
+for record <- results.records do
+  name = Neo4j.Result.Record.get(record, "n.name")
+  IO.puts("Person: #{name}")
+end
+
+# Clean up
+Neo4jEx.close(driver)
+```
+
+## Configuration
+
+### Basic Configuration
+
+```elixir
+# Basic authentication
+{:ok, driver} = Neo4jEx.start_link("bolt://localhost:7687",
+  auth: {"username", "password"})
+
+# No authentication (for development)
+{:ok, driver} = Neo4jEx.start_link("bolt://localhost:7687")
+
+# Custom timeouts
+{:ok, driver} = Neo4jEx.start_link("bolt://localhost:7687",
+  auth: {"neo4j", "password"},
+  connection_timeout: 30_000,  # 30 seconds
+  query_timeout: 60_000)       # 60 seconds
+```
+
+### Application Configuration
+
+You can configure Neo4jEx in your application configuration:
+
+```elixir
+# config/config.exs
+config :my_app, :neo4j,
+  uri: "bolt://localhost:7687",
+  auth: {"neo4j", "password"},
+  connection_timeout: 15_000,
+  query_timeout: 30_000
+```
+
+Then use it in your application:
+
+```elixir
+# In your application or supervisor
+config = Application.get_env(:my_app, :neo4j)
+{:ok, driver} = Neo4jEx.start_link(config[:uri],
+  auth: config[:auth],
+  connection_timeout: config[:connection_timeout],
+  query_timeout: config[:query_timeout])
+```
+
+### Environment Variables
+
+For development and testing, you can use environment variables:
+
+```bash
+export NEO4J_HOST=localhost
+export NEO4J_PORT=7687
+export NEO4J_USER=neo4j
+export NEO4J_PASS=password
+```
+
+### Supervision Tree
+
+#### Option 1: Using the Application Module (Recommended)
+
+Configure drivers in your application config and let Neo4j.Application manage them:
+
+```elixir
+# config/config.exs
+config :neo4j_ex,
+  drivers: [
+    default: [
+      uri: "bolt://localhost:7687",
+      auth: {"neo4j", "password"},
+      connection_timeout: 15_000,
+      query_timeout: 30_000
+    ],
+    secondary: [
+      uri: "bolt://secondary:7687",
+      auth: {"neo4j", "password"}
+    ]
+  ]
+
+# lib/my_app/application.ex
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      # Other children...
+      Neo4j.Application
+    ]
+
+    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
+```
+
+Then use the named drivers:
+
+```elixir
+{:ok, results} = Neo4jEx.run(:default, "MATCH (n) RETURN count(n)")
+{:ok, results} = Neo4jEx.run(:secondary, "MATCH (n) RETURN count(n)")
+```
+
+#### Option 2: Single Driver Configuration
+
+For a single driver, you can configure it directly:
+
+```elixir
+# config/config.exs
+config :neo4j_ex,
+  uri: "bolt://localhost:7687",
+  auth: {"neo4j", "password"}
+
+# The Neo4j.Application will automatically start a :default driver
+```
+
+#### Option 3: Manual Driver Management
+
+Start specific drivers manually in your supervision tree:
+
+```elixir
+# lib/my_app/application.ex
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      # Other children...
+      {Neo4j.Driver, [
+        "bolt://localhost:7687",
+        [
+          name: MyApp.Neo4j,
+          auth: {"neo4j", "password"}
+        ]
+      ]}
+    ]
+
+    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
+```
+
+Then use the named driver:
+
+```elixir
+{:ok, results} = Neo4jEx.run(MyApp.Neo4j, "MATCH (n) RETURN count(n)")
+```
+
+## Usage Examples
+
+### Simple Queries
+
+```elixir
+# Create nodes
+{:ok, _} = Neo4jEx.run(driver, """
+  CREATE (alice:Person {name: "Alice", age: 30})
+  CREATE (bob:Person {name: "Bob", age: 25})
+  CREATE (alice)-[:KNOWS]->(bob)
+""")
+
+# Query with parameters
+{:ok, results} = Neo4jEx.run(driver,
+  "MATCH (p:Person {name: $name}) RETURN p",
+  %{name: "Alice"})
+
+# Process results
+for record <- results.records do
+  person = Neo4j.Result.Record.get(record, "p")
+  IO.inspect(person)
+end
+```
+
+### Working with Sessions
+
+```elixir
+result = Neo4jEx.session(driver, fn session ->
+  # Multiple queries in the same session
+  {:ok, _} = Neo4j.Session.run(session,
+    "CREATE (p:Person {name: $name})", %{name: "Charlie"})
+
+  {:ok, results} = Neo4j.Session.run(session,
+    "MATCH (p:Person) RETURN count(p) AS total")
+
+  # Return the count
+  record = List.first(results.records)
+  Neo4j.Result.Record.get(record, "total")
+end)
+
+IO.puts("Total persons: #{result}")
+```
+
+### Transactions
+
+```elixir
+# Automatic transaction management
+result = Neo4jEx.transaction(driver, fn tx ->
+  # All operations in this block are part of the same transaction
+  {:ok, _} = Neo4j.Transaction.run(tx,
+    "CREATE (p:Person {name: $name})", %{name: "David"})
+
+  {:ok, _} = Neo4j.Transaction.run(tx,
+    "CREATE (p:Person {name: $name})", %{name: "Eve"})
+
+  # If this block completes successfully, transaction is committed
+  # If an exception is raised, transaction is rolled back
+  :success
+end)
+```
+
+### Manual Transaction Control
+
+```elixir
+Neo4jEx.session(driver, fn session ->
+  {:ok, tx} = Neo4j.Session.begin_transaction(session)
+
+  try do
+    {:ok, _} = Neo4j.Transaction.run(tx,
+      "CREATE (p:Person {name: $name})", %{name: "Frank"})
+
+    # Manually commit
+    :ok = Neo4j.Transaction.commit(tx)
+  rescue
+    _error ->
+      # Manually rollback on error
+      :ok = Neo4j.Transaction.rollback(tx)
+      reraise
+  end
+end)
+```
+
+### Working with Results
+
+```elixir
+{:ok, results} = Neo4jEx.run(driver, """
+  MATCH (p:Person)-[:KNOWS]->(friend:Person)
+  RETURN p.name AS person, friend.name AS friend, p.age AS age
+""")
+
+# Access by field name
+for record <- results.records do
+  person = Neo4j.Result.Record.get(record, "person")
+  friend = Neo4j.Result.Record.get(record, "friend")
+  age = Neo4j.Result.Record.get(record, "age")
+
+  IO.puts("#{person} (#{age}) knows #{friend}")
+end
+
+# Access by index
+for record <- results.records do
+  person = Neo4j.Result.Record.get(record, 0)
+  friend = Neo4j.Result.Record.get(record, 1)
+  age = Neo4j.Result.Record.get(record, 2)
+
+  IO.puts("#{person} (#{age}) knows #{friend}")
+end
+
+# Convert to map
+for record <- results.records do
+  map = Neo4j.Result.Record.to_map(record)
+  IO.inspect(map)
+  # %{"person" => "Alice", "friend" => "Bob", "age" => 30}
+end
+
+# Query statistics
+summary = results.summary
+if Neo4j.Result.Summary.contains_updates?(summary) do
+  nodes_created = Neo4j.Result.Summary.get_counter(summary, "nodes_created")
+  IO.puts("Created #{nodes_created} nodes")
+end
+```
+
+## Testing Your Connection
+
+Use the included test script to verify your Neo4j connection:
+
+```bash
+# With default settings (localhost:7687, neo4j/password)
+elixir scripts/test_connection.exs
+
+# With custom settings
+NEO4J_HOST=myhost NEO4J_PORT=7687 NEO4J_USER=myuser NEO4J_PASS=mypass elixir scripts/test_connection.exs
+```
+
+## Configuration Options
+
+| Option                | Type                              | Default            | Description                |
+| --------------------- | --------------------------------- | ------------------ | -------------------------- |
+| `:auth`               | `{username, password}` or `map()` | `nil`              | Authentication credentials |
+| `:user_agent`         | `string()`                        | `"neo4j_ex/0.1.0"` | Client identification      |
+| `:connection_timeout` | `integer()`                       | `15_000`           | Connection timeout (ms)    |
+| `:query_timeout`      | `integer()`                       | `30_000`           | Query timeout (ms)         |
+| `:max_pool_size`      | `integer()`                       | `10`               | Max connections (future)   |
+
+### Authentication Options
+
+```elixir
+# Tuple format (recommended)
+auth: {"username", "password"}
+
+# Map format (advanced)
+auth: %{
+  "scheme" => "basic",
+  "principal" => "username",
+  "credentials" => "password"
+}
+
+# No authentication
+auth: nil
+# or simply omit the :auth option
+```
+
+## Error Handling
+
+```elixir
+case Neo4jEx.run(driver, "INVALID CYPHER") do
+  {:ok, results} ->
+    # Handle success
+    IO.puts("Query succeeded")
+
+  {:error, {:query_failed, message}} ->
+    # Handle query errors
+    IO.puts("Query failed: #{message}")
+
+  {:error, {:connection_failed, reason}} ->
+    # Handle connection errors
+    IO.puts("Connection failed: #{inspect(reason)}")
+
+  {:error, reason} ->
+    # Handle other errors
+    IO.puts("Error: #{inspect(reason)}")
+end
+```
+
+## Development
+
+### Prerequisites
+
+- Elixir 1.12+
+- Neo4j 4.0+ or Memgraph running on localhost:7687
+
+### Running Tests
+
+```bash
+# Run unit tests
+mix test
+
+# Run with a specific Neo4j instance
+NEO4J_USER=neo4j NEO4J_PASS=yourpassword mix test
+
+# Test connection
+elixir scripts/test_connection.exs
+```
+
+### Architecture
+
+The driver is built with a layered architecture:
+
+```
+Neo4jEx (Public API)
+├── Neo4j.Driver (Driver Management)
+├── Neo4j.Session (Session Management)
+├── Neo4j.Transaction (Transaction Management)
+├── Neo4j.Protocol.* (Bolt Protocol Implementation)
+│   ├── Messages (Bolt Messages)
+│   └── PackStream (Serialization)
+├── Neo4j.Connection.* (Connection Layer)
+│   ├── Socket (TCP Communication)
+│   └── Handshake (Bolt Handshake)
+└── Neo4j.Result.* & Neo4j.Types.* (Data Types)
+    ├── Record (Query Results)
+    ├── Summary (Query Metadata)
+    └── Node, Relationship, Path (Graph Types)
+```
+
+## Roadmap
+
+- [x] **Week 1**: Basic connection and Bolt handshake
+- [x] **Week 2**: PackStream serialization and basic messaging
+- [x] **Week 3**: Query execution and result parsing
+- [x] **Week 4**: Polish, testing, and documentation
+- [ ] **Future**: Connection pooling, clustering support, advanced types
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -am 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Neo4j team for the excellent Bolt protocol documentation
+- Elixir community for the amazing ecosystem
+- Contributors and testers who helped make this driver possible
+
+## Support
+
+- 📖 [Documentation](https://hexdocs.pm/neo4j_ex)
+- 🐛 [Issue Tracker](https://github.com/Maxino22/neo4j_ex/issues)
+- 💬 [Discussions](https://github.com/Maxino22/neo4j_ex/discussions)
+
+---
+
+Made with ❤️ for the Elixir and Neo4j communities.
