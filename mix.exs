@@ -1,7 +1,7 @@
 defmodule Neo4jEx.MixProject do
   use Mix.Project
 
-  @version "0.1.2-rc3"
+  @version "0.1.3"
   @source_url "https://github.com/Maxino22/neo4j_ex"
 
   def project do

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-09-12
+
+### Fixed
+- **External Application Integration**: Fixed critical child specification format issue that prevented neo4j_ex from working correctly when used as a dependency in external applications.
+  - Changed child spec from `{Neo4j.Driver, {uri, opts}}` to `%{id: name, start: {Neo4j.Driver, :start_link, [uri, opts]}}`
+  - This ensures the supervisor calls `start_link/2` with separate arguments instead of passing a tuple as the first argument
+  - Resolves `Protocol.UndefinedError` when trying to convert tuple to string in `parse_uri/1`
+
+### Added
+- **Ecto-like Configuration**: Neo4j_Ex now provides the same clean, declarative configuration experience as Ecto
+- **Comprehensive Integration Tests**: Added extensive test suite for external application integration scenarios
+- **External Application Usage Guide**: Added detailed documentation (`EXTERNAL_APP_USAGE.md`) showing how to use neo4j_ex in external applications
+- **Multiple Configuration Options**: Support for single driver, multiple drivers, and custom supervision tree configurations
+
+### Improved
+- **Application Startup**: More robust application startup with better error handling for missing configurations
+- **Documentation**: Enhanced documentation with real-world usage examples and migration guides
+- **Developer Experience**: Neo4j_Ex can now be used exactly like Ecto - just add to dependencies, configure, and use
+
+### Technical Details
+- Made `get_single_driver_config/0` and `build_driver_child_spec/2` public for testing
+- Enhanced child specification building to use proper supervisor child spec format
+- Added comprehensive test coverage for external app integration scenarios
+- Fixed supervisor naming conflicts in tests
+
 ## [0.1.2-rc3] - 2025-09-12
 
 ### Fixed 

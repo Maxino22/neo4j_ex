@@ -99,7 +99,7 @@ defmodule Neo4j.Application do
     [pool_supervisor | driver_children]
   end
 
-  defp get_single_driver_config do
+  def get_single_driver_config do
     uri = Application.get_env(:neo4j_ex, :uri)
     auth = Application.get_env(:neo4j_ex, :auth)
     connection_timeout = Application.get_env(:neo4j_ex, :connection_timeout)
@@ -120,12 +120,15 @@ defmodule Neo4j.Application do
     end
   end
 
-  defp build_driver_child_spec(name, config) do
+  def build_driver_child_spec(name, config) do
     uri = Keyword.get(config, :uri)
 
     if uri do
       opts = Keyword.put(config, :name, name)
-      {Neo4j.Driver, {uri, opts}}
+      %{
+        id: name,
+        start: {Neo4j.Driver, :start_link, [uri, opts]}
+      }
     else
       Logger.warning("Neo4j driver #{name} missing :uri configuration, skipping")
       nil
