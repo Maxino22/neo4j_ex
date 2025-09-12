@@ -19,13 +19,9 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 - **Sessions**: Session-based query execution for better resource management
 - **Type Safety**: Proper handling of Neo4j data types and PackStream serialization
 - **Error Handling**: Comprehensive error handling and reporting
+- **Connection Pooling**: Efficient connection pooling for high-performance applications
 - **Pure Elixir**: No external dependencies, built entirely in Elixir
 
-### Current Limitations
-
-- **No Streaming Support**: Results are currently loaded entirely into memory. Streaming support for large result sets is planned for future releases.
-- **Single Connection per Session**: Each session uses a single connection. Connection pooling is planned for future releases.
-- **Basic Type Support**: Advanced Neo4j types (Point, Duration, etc.) are not yet fully supported.
 
 ## Installation
 
@@ -34,7 +30,7 @@ Add `neo4j_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:neo4j_ex, "~> 0.1.2-rc1"}
+    {:neo4j_ex, "~> 0.1.2-rc2"}
   ]
 end
 ```
@@ -333,6 +329,124 @@ if Neo4j.Result.Summary.contains_updates?(summary) do
 end
 ```
 
+### Streaming Large Result Sets
+
+For large datasets, Neo4jEx provides a streaming interface that allows you to process results without loading everything into memory at once:
+
+```elixir
+# Stream all Person nodes without loading them all into memory
+driver
+|> Neo4jEx.stream("MATCH (n:Person) RETURN n")
+|> Stream.each(&process_person/1)
+|> Stream.run()
+
+# Stream with custom batch size and timeout
+driver
+|> Neo4jEx.stream("MATCH (n:BigData) RETURN n", %{}, batch_size: 500, timeout: 60_000)
+|> Stream.chunk_every(100)
+|> Enum.each(&batch_process/1)
+
+# Memory-efficient aggregation
+total = driver
+|> Neo4jEx.stream("MATCH (n:Transaction) RETURN n.amount")
+|> Stream.map(fn record -> record |> Neo4j.Result.Record.get("n.amount") end)
+|> Enum.sum()
+
+# Stream with custom processing function
+driver
+|> Neo4jEx.Stream.run_with("MATCH (n:Person) RETURN n.name", %{}, 
+   fn record -> 
+     name = Neo4j.Result.Record.get(record, "n.name")
+     String.upcase(name)
+   end)
+|> Enum.each(&IO.puts/1)
+```
+
+The streaming interface uses cursor-based pagination under the hood, automatically fetching data in batches to minimize memory usage while maintaining good performance.
+
+### Connection Pooling
+
+Neo4jEx provides efficient connection pooling for high-performance applications. Connection pooling allows you to reuse connections across multiple queries, reducing connection overhead and improving throughput.
+
+#### Starting a Connection Pool
+
+```elixir
+# Start a connection pool
+{:ok, _pool} = Neo4jEx.start_pool([
+  uri: "bolt://localhost:7687",
+  auth: {"neo4j", "password"},
+  pool_size: 15,        # Maximum number of connections
+  max_overflow: 5       # Additional connections when pool is full
+])
+
+# Or with a custom name
+{:ok, _pool} = Neo4jEx.start_pool([
+  uri: "bolt://localhost:7687",
+  auth: {"neo4j", "password"},
+  pool_size: 10,
+  name: :my_pool
+])
+```
+
+#### Using Pooled Connections
+
+```elixir
+# Execute queries using the default pool
+{:ok, results} = Neo4jEx.Pool.run("MATCH (n:Person) RETURN n")
+
+# Execute queries with parameters
+{:ok, results} = Neo4jEx.Pool.run(
+  "CREATE (p:Person {name: $name}) RETURN p", 
+  %{name: "Alice"}
+)
+
+# Execute transactions using the pool
+result = Neo4jEx.Pool.transaction(fn ->
+  Neo4jEx.Pool.run("CREATE (p:Person {name: 'Bob'})")
+  Neo4jEx.Pool.run("CREATE (p:Person {name: 'Carol'})")
+  :success
+end)
+
+# Use a named pool
+{:ok, results} = Neo4jEx.Pool.run(
+  "MATCH (n) RETURN count(n)", 
+  %{}, 
+  pool_name: :my_pool
+)
+```
+
+#### Pool Configuration Options
+
+| Option          | Type        | Default | Description                           |
+| --------------- | ----------- | ------- | ------------------------------------- |
+| `:uri`          | `string()`  | -       | Neo4j connection URI (required)       |
+| `:auth`         | `tuple()`   | `nil`   | Authentication credentials            |
+| `:pool_size`    | `integer()` | `10`    | Maximum number of connections         |
+| `:max_overflow` | `integer()` | `5`     | Additional connections when pool full |
+| `:name`         | `atom()`    | -       | Pool name for multiple pools          |
+
+#### Pool Management
+
+```elixir
+# Check pool status
+status = Neo4jEx.Pool.status()
+# Returns: {:ready, pool_size, checked_out, overflow}
+
+# Stop a pool
+Neo4jEx.stop_pool()
+
+# Stop a named pool
+Neo4jEx.stop_pool(:my_pool)
+```
+
+#### Benefits of Connection Pooling
+
+- **Improved Performance**: Reuse existing connections instead of creating new ones
+- **Resource Management**: Control the maximum number of concurrent connections
+- **Scalability**: Handle high-concurrency scenarios efficiently
+- **Automatic Recovery**: Connections are automatically recreated if they fail
+- **Load Distribution**: Distribute queries across multiple connections
+
 ## Testing Your Connection
 
 Use the included test script to verify your Neo4j connection:
@@ -442,7 +556,7 @@ Neo4jEx (Public API)
 - [x] **Week 2**: PackStream serialization and basic messaging
 - [x] **Week 3**: Query execution and result parsing
 - [x] **Week 4**: Polish, testing, and documentation
-- [ ] **v0.2.0**: Result streaming support for large datasets
+- [x] **v0.2.0**: Result streaming support for large datasets
 - [ ] **v0.3.0**: Connection pooling and improved performance
 - [ ] **v0.4.0**: Clustering support and routing
 - [ ] **v1.0.0**: Advanced Neo4j types (Point, Duration, etc.) and production readiness

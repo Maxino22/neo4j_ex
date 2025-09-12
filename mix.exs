@@ -1,7 +1,7 @@
 defmodule Neo4jEx.MixProject do
   use Mix.Project
 
-  @version "0.1.2-rc1"
+  @version "0.1.2-rc2"
   @source_url "https://github.com/Maxino22/neo4j_ex"
 
   def project do
@@ -36,6 +36,9 @@ defmodule Neo4jEx.MixProject do
 
   defp deps do
     [
+      # Connection pooling
+      {:poolboy, "~> 1.5"},
+
       # Development and testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
@@ -61,7 +64,7 @@ defmodule Neo4jEx.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
         "Documentation" => "https://hexdocs.pm/neo4j_ex"
       },
-      maintainers: ["Your Name <your.email@example.com>"]
+      maintainers: ["Maxino22 <ajaybullec@gmail.com>"]
     ]
   end
 

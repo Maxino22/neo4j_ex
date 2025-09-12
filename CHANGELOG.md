@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.2-rc1] - 2025-01-11
+## [0.1.2-rc2] - 2025-09-12
+### Added
+- Support for **advanced Neo4j data types** (datetime, temporal and spatial).
+- **Streaming query results** for efficient handling of large datasets.
+- **Connection pooling** for better concurrency and resource management.
+
+
+## [0.1.2-rc1] - 2025-0-11
 
 ### Fixed
 - **Message Buffering Issues**: Fixed critical bug where multiple Bolt protocol messages arriving in a single network packet were not properly handled, causing timeouts in both session queries and transactions. Implemented proper message buffering system using process dictionary to maintain unprocessed data between message receives.
@@ -26,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated result structures to use proper `Neo4j.Result.Record` and `Neo4j.Result.Summary` structs
 
 
-## [0.1.1] - 2025-01-11
+## [0.1.1] - 2025-09-11
 
 ### Fixed
 - **Authentication Timeout Issues**: Fixed hardcoded 5-second timeout in `receive_message/3` function that was causing authentication failures. Increased timeout to 15 seconds to match connection timeout settings.
@@ -49,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PackStream module cleaned up unused binary markers (reserved for future use)
 - Enhanced result collection with proper field name handling
 
-## [0.1.0] - 2025-01-11
+## [0.1.0] - 2025-09-11
 
 ### Added
 

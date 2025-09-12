@@ -72,7 +72,10 @@ defmodule Neo4j.Application do
   Builds child specifications based on application configuration.
   """
   def build_children do
-    case Application.get_env(:neo4j_ex, :drivers) do
+    # Always include the pool supervisor
+    pool_supervisor = Neo4j.Connection.Pool.Supervisor
+
+    driver_children = case Application.get_env(:neo4j_ex, :drivers) do
       drivers when is_list(drivers) ->
         # Multiple named drivers
         drivers
@@ -92,6 +95,8 @@ defmodule Neo4j.Application do
         # Single driver as keyword list
         [build_driver_child_spec(:default, config)]
     end
+
+    [pool_supervisor | driver_children]
   end
 
   defp get_single_driver_config do
