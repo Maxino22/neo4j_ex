@@ -125,7 +125,7 @@ defmodule Neo4j.Application do
 
     if uri do
       opts = Keyword.put(config, :name, name)
-      {Neo4j.Driver, [uri, opts]}
+      {Neo4j.Driver, {uri, opts}}
     else
       Logger.warning("Neo4j driver #{name} missing :uri configuration, skipping")
       nil

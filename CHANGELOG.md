@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2-rc3] - 2025-09-12
+
+### Fixed 
+- Application config fixes
+
 ## [0.1.2-rc2] - 2025-09-12
 ### Added
 - Support for **advanced Neo4j data types** (datetime, temporal and spatial).
