@@ -23,7 +23,6 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 
 ### Current Limitations
 
-- **No Streaming Support**: Results are currently loaded entirely into memory. Streaming support for large result sets is planned for future releases.
 - **Single Connection per Session**: Each session uses a single connection. Connection pooling is planned for future releases.
 - **Basic Type Support**: Advanced Neo4j types (Point, Duration, etc.) are not yet fully supported.
 
@@ -333,6 +332,41 @@ if Neo4j.Result.Summary.contains_updates?(summary) do
 end
 ```
 
+### Streaming Large Result Sets
+
+For large datasets, Neo4jEx provides a streaming interface that allows you to process results without loading everything into memory at once:
+
+```elixir
+# Stream all Person nodes without loading them all into memory
+driver
+|> Neo4jEx.stream("MATCH (n:Person) RETURN n")
+|> Stream.each(&process_person/1)
+|> Stream.run()
+
+# Stream with custom batch size and timeout
+driver
+|> Neo4jEx.stream("MATCH (n:BigData) RETURN n", %{}, batch_size: 500, timeout: 60_000)
+|> Stream.chunk_every(100)
+|> Enum.each(&batch_process/1)
+
+# Memory-efficient aggregation
+total = driver
+|> Neo4jEx.stream("MATCH (n:Transaction) RETURN n.amount")
+|> Stream.map(fn record -> record |> Neo4j.Result.Record.get("n.amount") end)
+|> Enum.sum()
+
+# Stream with custom processing function
+driver
+|> Neo4jEx.Stream.run_with("MATCH (n:Person) RETURN n.name", %{}, 
+   fn record -> 
+     name = Neo4j.Result.Record.get(record, "n.name")
+     String.upcase(name)
+   end)
+|> Enum.each(&IO.puts/1)
+```
+
+The streaming interface uses cursor-based pagination under the hood, automatically fetching data in batches to minimize memory usage while maintaining good performance.
+
 ## Testing Your Connection
 
 Use the included test script to verify your Neo4j connection:
@@ -442,7 +476,7 @@ Neo4jEx (Public API)
 - [x] **Week 2**: PackStream serialization and basic messaging
 - [x] **Week 3**: Query execution and result parsing
 - [x] **Week 4**: Polish, testing, and documentation
-- [ ] **v0.2.0**: Result streaming support for large datasets
+- [x] **v0.2.0**: Result streaming support for large datasets
 - [ ] **v0.3.0**: Connection pooling and improved performance
 - [ ] **v0.4.0**: Clustering support and routing
 - [ ] **v1.0.0**: Advanced Neo4j types (Point, Duration, etc.) and production readiness

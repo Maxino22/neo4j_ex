@@ -25,6 +25,12 @@ defmodule Neo4jEx do
         Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Carol"})
       end)
 
+      # Stream large result sets
+      driver
+      |> Neo4jEx.stream("MATCH (n:Person) RETURN n")
+      |> Stream.each(&process_record/1)
+      |> Stream.run()
+
   ## Features
 
   - **Bolt Protocol Support**: Full implementation of Neo4j's Bolt protocol v5.x
@@ -33,6 +39,7 @@ defmodule Neo4jEx do
   - **Query Execution**: Simple query execution with parameter support
   - **Transactions**: Full transaction support with automatic commit/rollback
   - **Sessions**: Session-based query execution for better resource management
+  - **Streaming**: Memory-efficient processing of large result sets
   - **Type Safety**: Proper handling of Neo4j data types and PackStream serialization
   - **Error Handling**: Comprehensive error handling and reporting
 
@@ -43,6 +50,7 @@ defmodule Neo4jEx do
   - **High-level API** (`Neo4jEx`, `Neo4j.Driver`): Simple interface for common operations
   - **Session Management** (`Neo4j.Session`): Session-based query execution
   - **Transaction Support** (`Neo4j.Transaction`): Transaction lifecycle management
+  - **Streaming Support** (`Neo4jEx.Stream`): Memory-efficient processing of large datasets
   - **Protocol Layer** (`Neo4j.Protocol.*`): Bolt protocol implementation
   - **Connection Layer** (`Neo4j.Connection.*`): Low-level socket and handshake handling
   - **Type System** (`Neo4j.Types.*`, `Neo4j.Result.*`): Neo4j data type representations
@@ -64,24 +72,30 @@ defmodule Neo4jEx do
         auth: {"neo4j", "password"})
 
       # Create some data
-      {:ok, _result} = Neo4jEx.run(driver, \"\"\"
+      {:ok, _result} = Neo4jEx.run(driver, "
         CREATE (alice:Person {name: "Alice", age: 30})
         CREATE (bob:Person {name: "Bob", age: 25})
         CREATE (alice)-[:KNOWS]->(bob)
-      \"\"\")
+      "")
 
       # Query the data
-      {:ok, results} = Neo4jEx.run(driver, \"\"\"
+      {:ok, results} = Neo4jEx.run(driver, "
         MATCH (p:Person)-[:KNOWS]->(friend:Person)
         RETURN p.name AS person, friend.name AS friend
-      \"\"\")
+      "")
 
       # Process results
       for record <- results.records do
         person = Neo4j.Result.Record.get(record, "person")
         friend = Neo4j.Result.Record.get(record, "friend")
-        IO.puts("\#{person} knows \#{friend}")
+        IO.puts('{person} knows {friend}"")
       end
+
+      # Stream large result sets
+      driver
+      |> Neo4jEx.stream("MATCH (n:Person) RETURN n.name")
+      |> Stream.map(fn record -> Neo4j.Result.Record.get(record, "n.name") end)
+      |> Enum.each(&IO.puts/1)
 
       # Clean up
       Neo4jEx.close(driver)
@@ -142,6 +156,42 @@ defmodule Neo4jEx do
   """
   def run(driver, query, params \\ %{}, opts \\ []) do
     Driver.run(driver, query, params, opts)
+  end
+
+  @doc """
+  Creates a stream for processing large result sets.
+
+  This is a convenience function that delegates to `Neo4j.Stream.run/4`.
+
+  ## Parameters
+    - driver: Driver process
+    - query: Cypher query string
+    - params: Query parameters map (default: %{})
+    - opts: Query options (default: [])
+
+  ## Options
+    - `:batch_size` - Number of records to fetch at once (default: 1000)
+    - `:timeout` - Query timeout in milliseconds (default: 30000)
+
+  ## Returns
+    Stream of records
+
+  ## Examples
+
+      # Basic streaming
+      driver
+      |> Neo4jEx.stream("MATCH (n:Person) RETURN n")
+      |> Stream.each(&process_record/1)
+      |> Stream.run()
+
+      # With custom batch size
+      driver
+      |> Neo4jEx.stream("MATCH (n:BigData) RETURN n", %{}, batch_size: 500)
+      |> Stream.chunk_every(100)
+      |> Enum.each(&batch_process/1)
+  """
+  def stream(driver, query, params \\ %{}, opts \\ []) do
+    Neo4j.Stream.run(driver, query, params, opts)
   end
 
   @doc """
@@ -236,5 +286,5 @@ defmodule Neo4jEx do
     Application.spec(:neo4j_ex, :vsn) |> to_string()
   end
 
- 
+
 end

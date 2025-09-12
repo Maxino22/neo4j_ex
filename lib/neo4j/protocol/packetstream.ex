@@ -291,10 +291,42 @@ defmodule Neo4j.Protocol.PackStream do
   defp decode_struct(signature, size, data) do
     case decode_list_items(size, data, []) do
       {:ok, fields, rest} ->
-        {:ok, {:struct, signature, fields}, rest}
+        struct_value = convert_neo4j_struct(signature, fields)
+        {:ok, struct_value, rest}
       error ->
         error
     end
+  end
+
+  # Convert Neo4j struct signatures to proper Elixir types
+  defp convert_neo4j_struct(0x4E, [id, labels, properties]) do
+    # Node structure (signature 0x4E = 78)
+    Neo4j.Types.Node.new(id, labels, properties)
+  end
+
+  defp convert_neo4j_struct(0x4E, [id, labels, properties, element_id]) do
+    # Node structure with element_id (Neo4j 5.0+)
+    Neo4j.Types.Node.new(id, labels, properties, element_id)
+  end
+
+  defp convert_neo4j_struct(0x52, [id, start_id, end_id, type, properties]) do
+    # Relationship structure (signature 0x52 = 82)
+    Neo4j.Types.Relationship.new(id, start_id, end_id, type, properties)
+  end
+
+  defp convert_neo4j_struct(0x52, [id, start_id, end_id, type, properties, element_id]) do
+    # Relationship structure with element_id (Neo4j 5.0+)
+    Neo4j.Types.Relationship.new(id, start_id, end_id, type, properties, element_id)
+  end
+
+  defp convert_neo4j_struct(0x50, [nodes, relationships, indices]) do
+    # Path structure (signature 0x50 = 80)
+    Neo4j.Types.Path.new(nodes, relationships, indices)
+  end
+
+  defp convert_neo4j_struct(signature, fields) do
+    # Unknown structure - return as-is
+    {:struct, signature, fields}
   end
 
   @doc """
