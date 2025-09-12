@@ -61,8 +61,62 @@ defmodule Neo4j.Protocol.PackStream do
   def encode(value) when is_float(value), do: encode_float(value)
   def encode(value) when is_binary(value), do: encode_string(value)
   def encode(value) when is_list(value), do: encode_list(value)
-  def encode(value) when is_map(value), do: encode_map(value)
   def encode({:struct, signature, fields}), do: encode_struct(signature, fields)
+
+  # Advanced Neo4j types - must come before generic map handling
+  def encode(%Neo4j.Types.Point2D{} = point) do
+    fields = Neo4j.Types.encode_point(point)
+    encode_struct(0x58, fields)
+  end
+
+  def encode(%Neo4j.Types.Point3D{} = point) do
+    fields = Neo4j.Types.encode_point(point)
+    encode_struct(0x59, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jDate{} = date) do
+    fields = Neo4j.Types.encode_date(date)
+    encode_struct(0x44, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jTime{} = time) do
+    fields = Neo4j.Types.encode_time(time)
+    encode_struct(0x54, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jLocalTime{} = local_time) do
+    fields = Neo4j.Types.encode_local_time(local_time)
+    encode_struct(0x74, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jDateTime{} = datetime) do
+    fields = Neo4j.Types.encode_datetime(datetime)
+    encode_struct(0x46, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jLocalDateTime{} = local_datetime) do
+    fields = Neo4j.Types.encode_local_datetime(local_datetime)
+    encode_struct(0x64, fields)
+  end
+
+  def encode(%Neo4j.Types.Neo4jDuration{} = duration) do
+    fields = Neo4j.Types.encode_duration(duration)
+    encode_struct(0x45, fields)
+  end
+
+  # Elixir standard types - convert to Neo4j types
+  def encode(%DateTime{} = datetime) do
+    neo4j_datetime = Neo4j.Types.from_elixir_datetime(datetime)
+    encode(neo4j_datetime)
+  end
+
+  def encode(%Date{} = date) do
+    neo4j_date = Neo4j.Types.from_elixir_date(date)
+    encode(neo4j_date)
+  end
+
+  # Generic map handling - must come after struct handling
+  def encode(value) when is_map(value), do: encode_map(value)
 
   def encode(value) do
     raise ArgumentError, "Cannot encode value: #{inspect(value)}"
@@ -322,6 +376,47 @@ defmodule Neo4j.Protocol.PackStream do
   defp convert_neo4j_struct(0x50, [nodes, relationships, indices]) do
     # Path structure (signature 0x50 = 80)
     Neo4j.Types.Path.new(nodes, relationships, indices)
+  end
+
+  # Advanced data types
+  defp convert_neo4j_struct(0x58, fields) do
+    # Point2D structure (signature 0x58 = 88)
+    Neo4j.Types.decode_point(fields)
+  end
+
+  defp convert_neo4j_struct(0x59, fields) do
+    # Point3D structure (signature 0x59 = 89)
+    Neo4j.Types.decode_point(fields)
+  end
+
+  defp convert_neo4j_struct(0x44, fields) do
+    # Date structure (signature 0x44 = 68)
+    Neo4j.Types.decode_date(fields)
+  end
+
+  defp convert_neo4j_struct(0x54, fields) do
+    # Time structure (signature 0x54 = 84)
+    Neo4j.Types.decode_time(fields)
+  end
+
+  defp convert_neo4j_struct(0x74, fields) do
+    # LocalTime structure (signature 0x74 = 116)
+    Neo4j.Types.decode_local_time(fields)
+  end
+
+  defp convert_neo4j_struct(0x46, fields) do
+    # DateTime structure (signature 0x46 = 70)
+    Neo4j.Types.decode_datetime(fields)
+  end
+
+  defp convert_neo4j_struct(0x64, fields) do
+    # LocalDateTime structure (signature 0x64 = 100)
+    Neo4j.Types.decode_local_datetime(fields)
+  end
+
+  defp convert_neo4j_struct(0x45, fields) do
+    # Duration structure (signature 0x45 = 69)
+    Neo4j.Types.decode_duration(fields)
   end
 
   defp convert_neo4j_struct(signature, fields) do

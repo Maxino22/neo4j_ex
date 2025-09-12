@@ -286,5 +286,96 @@ defmodule Neo4jEx do
     Application.spec(:neo4j_ex, :vsn) |> to_string()
   end
 
+  # Connection Pool API
+
+  @doc """
+  Start a connection pool.
+
+  This is a convenience function that delegates to `Neo4j.Connection.Pool.start_pool/1`.
+
+  ## Options
+  - `:uri` - Neo4j connection URI (required)
+  - `:auth` - Authentication tuple `{username, password}` or map
+  - `:pool_size` - Maximum number of connections (default: 10)
+  - `:max_overflow` - Maximum overflow connections (default: 5)
+  - `:user_agent` - Client user agent string
+  - `:connection_timeout` - Connection timeout in milliseconds
+  - `:query_timeout` - Query timeout in milliseconds
+  - `:name` - Pool name (optional)
+
+  ## Examples
+
+      {:ok, _pool} = Neo4jEx.start_pool([
+        uri: "bolt://localhost:7687",
+        auth: {"neo4j", "password"},
+        pool_size: 15,
+        max_overflow: 5
+      ])
+  """
+  def start_pool(opts) do
+    Neo4j.Connection.Pool.start_pool(opts)
+  end
+
+  @doc """
+  Stop a connection pool.
+
+  This is a convenience function that delegates to `Neo4j.Connection.Pool.stop_pool/1`.
+
+  ## Parameters
+  - `pool_name` - Pool name (default: Neo4j.Connection.Pool)
+  """
+  def stop_pool(pool_name \\ Neo4j.Connection.Pool) do
+    Neo4j.Connection.Pool.stop_pool(pool_name)
+  end
+
+  defmodule Pool do
+    @doc """
+    Execute a query using a pooled connection.
+
+    ## Parameters
+    - `query` - Cypher query string
+    - `params` - Query parameters map (default: %{})
+    - `opts` - Query options (default: [])
+
+    ## Examples
+
+        {:ok, results} = Neo4jEx.Pool.run("MATCH (n:Person) RETURN n")
+        {:ok, results} = Neo4jEx.Pool.run("CREATE (p:Person {name: $name})", %{name: "Alice"})
+    """
+    def run(query, params \\ %{}, opts \\ []) do
+      Neo4j.Connection.Pool.run(query, params, opts)
+    end
+
+    @doc """
+    Execute a function within a transaction using a pooled connection.
+
+    ## Parameters
+    - `fun` - Function to execute within the transaction
+    - `opts` - Transaction options (default: [])
+
+    ## Examples
+
+        Neo4jEx.Pool.transaction(fn ->
+          Neo4jEx.Pool.run("CREATE (p:Person {name: 'Alice'})")
+          Neo4jEx.Pool.run("CREATE (p:Person {name: 'Bob'})")
+        end)
+    """
+    def transaction(fun, opts \\ []) when is_function(fun, 0) do
+      Neo4j.Connection.Pool.transaction(fun, opts)
+    end
+
+    @doc """
+    Get pool status information.
+
+    ## Parameters
+    - `pool_name` - Pool name (default: Neo4j.Connection.Pool)
+
+    ## Returns
+    Map with pool status information
+    """
+    def status(pool_name \\ Neo4j.Connection.Pool) do
+      Neo4j.Connection.Pool.status(pool_name)
+    end
+  end
 
 end
