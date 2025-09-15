@@ -102,6 +102,7 @@ defmodule Neo4jEx do
   """
 
   alias Neo4j.Driver
+  alias Neo4j.Registry
 
   @doc """
   Starts a new Neo4j driver connection.
@@ -135,12 +136,81 @@ defmodule Neo4jEx do
   end
 
   @doc """
-  Executes a Cypher query directly using the driver.
+  Executes a Cypher query using the default driver.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+
+  ## Returns
+    - `{:ok, results}` on success where results contains records and summary
+    - `{:error, reason}` on failure
+
+  ## Examples
+
+      # Uses :default driver automatically
+      {:ok, results} = Neo4jEx.run("MATCH (n:Person) RETURN n.name")
+  """
+  def run(query) when is_binary(query) do
+    run(:default, query, %{}, [])
+  end
+
+  @doc """
+  Executes a Cypher query using the default driver with parameters.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+    - params: Query parameters map
+
+  ## Returns
+    - `{:ok, results}` on success where results contains records and summary
+    - `{:error, reason}` on failure
+
+  ## Examples
+
+      # Uses :default driver automatically
+      {:ok, results} = Neo4jEx.run("CREATE (p:Person {name: $name})", %{name: "Alice"})
+  """
+  def run(query, params) when is_binary(query) and is_map(params) do
+    run(:default, query, params, [])
+  end
+
+  @doc """
+  Executes a Cypher query using the default driver with parameters and options.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+    - params: Query parameters map
+    - opts: Query options
+
+  ## Returns
+    - `{:ok, results}` on success where results contains records and summary
+    - `{:error, reason}` on failure
+
+  ## Examples
+
+      # Uses :default driver automatically
+      {:ok, results} = Neo4jEx.run("CREATE (p:Person {name: $name})", %{name: "Alice"}, timeout: 5000)
+  """
+  def run(query, params, opts) when is_binary(query) and is_map(params) and is_list(opts) do
+    run(:default, query, params, opts)
+  end
+
+  @doc """
+  Executes a Cypher query directly using the specified driver.
 
   This is a convenience function that delegates to `Neo4j.Driver.run/4`.
 
   ## Parameters
-    - driver: Driver process
+    - driver: Driver process or driver name (atom)
     - query: Cypher query string
     - params: Query parameters map (default: %{})
     - opts: Query options (default: [])
@@ -152,10 +222,85 @@ defmodule Neo4jEx do
   ## Examples
 
       {:ok, results} = Neo4jEx.run(driver, "MATCH (n:Person) RETURN n.name")
-      {:ok, results} = Neo4jEx.run(driver, "CREATE (p:Person {name: $name})", %{name: "Alice"})
+      {:ok, results} = Neo4jEx.run(:default, "MATCH (n:Person) RETURN n.name")
+      {:ok, results} = Neo4jEx.run(:analytics, "CREATE (p:Person {name: $name})", %{name: "Alice"})
   """
   def run(driver, query, params \\ %{}, opts \\ []) do
-    Driver.run(driver, query, params, opts)
+    with {:ok, resolved_driver} <- resolve_driver(driver) do
+      Driver.run(resolved_driver, query, params, opts)
+    end
+  end
+
+  @doc """
+  Creates a stream for processing large result sets using the default driver.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+
+  ## Returns
+    Stream of records
+
+  ## Examples
+
+      # Uses :default driver automatically
+      Neo4jEx.stream("MATCH (n:Person) RETURN n")
+      |> Stream.each(&process_record/1)
+      |> Stream.run()
+  """
+  def stream(query) when is_binary(query) do
+    stream(:default, query, %{}, [])
+  end
+
+  @doc """
+  Creates a stream for processing large result sets using the default driver with parameters.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+    - params: Query parameters map
+
+  ## Returns
+    Stream of records
+
+  ## Examples
+
+      # Uses :default driver automatically
+      Neo4jEx.stream("MATCH (n:Person {age: $age}) RETURN n", %{age: 30})
+      |> Stream.each(&process_record/1)
+      |> Stream.run()
+  """
+  def stream(query, params) when is_binary(query) and is_map(params) do
+    stream(:default, query, params, [])
+  end
+
+  @doc """
+  Creates a stream for processing large result sets using the default driver with parameters and options.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 4-arity version instead.
+
+  ## Parameters
+    - query: Cypher query string
+    - params: Query parameters map
+    - opts: Query options
+
+  ## Returns
+    Stream of records
+
+  ## Examples
+
+      # Uses :default driver automatically
+      Neo4jEx.stream("MATCH (n:Person {age: $age}) RETURN n", %{age: 30}, batch_size: 500)
+      |> Stream.each(&process_record/1)
+      |> Stream.run()
+  """
+  def stream(query, params, opts) when is_binary(query) and is_map(params) and is_list(opts) do
+    stream(:default, query, params, opts)
   end
 
   @doc """
@@ -164,7 +309,7 @@ defmodule Neo4jEx do
   This is a convenience function that delegates to `Neo4j.Stream.run/4`.
 
   ## Parameters
-    - driver: Driver process
+    - driver: Driver process or driver name (atom)
     - query: Cypher query string
     - params: Query parameters map (default: %{})
     - opts: Query options (default: [])
@@ -191,7 +336,32 @@ defmodule Neo4jEx do
       |> Enum.each(&batch_process/1)
   """
   def stream(driver, query, params \\ %{}, opts \\ []) do
-    Neo4j.Stream.run(driver, query, params, opts)
+    with {:ok, resolved_driver} <- resolve_driver(driver) do
+      Neo4j.Stream.run(resolved_driver, query, params, opts)
+    end
+  end
+
+  @doc """
+  Creates a session using the default driver and executes the given function with it.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 2-arity version instead.
+
+  ## Parameters
+    - fun: Function that receives the session as an argument
+
+  ## Returns
+    Result of the function
+
+  ## Examples
+
+      # Uses :default driver automatically
+      result = Neo4jEx.session(fn session ->
+        Neo4j.Session.run(session, "MATCH (n:Person) RETURN count(n)")
+      end)
+  """
+  def session(fun) when is_function(fun, 1) do
+    session(:default, fun)
   end
 
   @doc """
@@ -200,7 +370,7 @@ defmodule Neo4jEx do
   This is a convenience function that delegates to `Neo4j.Driver.session/2`.
 
   ## Parameters
-    - driver: Driver process
+    - driver: Driver process or driver name (atom)
     - fun: Function that receives the session as an argument
 
   ## Returns
@@ -211,9 +381,39 @@ defmodule Neo4jEx do
       result = Neo4jEx.session(driver, fn session ->
         Neo4j.Session.run(session, "MATCH (n:Person) RETURN count(n)")
       end)
+
+      result = Neo4jEx.session(:default, fn session ->
+        Neo4j.Session.run(session, "MATCH (n:Person) RETURN count(n)")
+      end)
   """
   def session(driver, fun) when is_function(fun, 1) do
-    Driver.session(driver, fun)
+    with {:ok, resolved_driver} <- resolve_driver(driver) do
+      Driver.session(resolved_driver, fun)
+    end
+  end
+
+  @doc """
+  Creates a transaction using the default driver and executes the given function with it.
+
+  This function uses the `:default` driver automatically. If you need to use
+  a different driver, use the 2-arity version instead.
+
+  ## Parameters
+    - fun: Function that receives the transaction as an argument
+
+  ## Returns
+    Result of the function
+
+  ## Examples
+
+      # Uses :default driver automatically
+      result = Neo4jEx.transaction(fn tx ->
+        Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Bob"})
+        Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Carol"})
+      end)
+  """
+  def transaction(fun) when is_function(fun, 1) do
+    transaction(:default, fun)
   end
 
   @doc """
@@ -222,7 +422,7 @@ defmodule Neo4jEx do
   This is a convenience function that delegates to `Neo4j.Driver.transaction/2`.
 
   ## Parameters
-    - driver: Driver process
+    - driver: Driver process or driver name (atom)
     - fun: Function that receives the transaction as an argument
 
   ## Returns
@@ -234,9 +434,15 @@ defmodule Neo4jEx do
         Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Bob"})
         Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Carol"})
       end)
+
+      result = Neo4jEx.transaction(:analytics, fn tx ->
+        Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Bob"})
+      end)
   """
   def transaction(driver, fun) when is_function(fun, 1) do
-    Driver.transaction(driver, fun)
+    with {:ok, resolved_driver} <- resolve_driver(driver) do
+      Driver.transaction(resolved_driver, fun)
+    end
   end
 
   @doc """
@@ -326,6 +532,12 @@ defmodule Neo4jEx do
   """
   def stop_pool(pool_name \\ Neo4j.Connection.Pool) do
     Neo4j.Connection.Pool.stop_pool(pool_name)
+  end
+
+  # Private Functions
+
+  defp resolve_driver(driver_ref) do
+    Registry.lookup(driver_ref)
   end
 
   defmodule Pool do

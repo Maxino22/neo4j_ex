@@ -7,26 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-09-15
+
+### Added
+
+- Support for implicit `:default` driver across the public API.
+  - `Neo4jEx.run/1`
+  - `Neo4jEx.Session.start/0`
+  - `Neo4jEx.Transaction.run/1`
+- Users no longer need to pass `:default` explicitly:
+
+  ```elixir
+  # Before
+  Neo4jEx.run(:default, "MATCH (n) RETURN n")
+
+  # Now
+  Neo4jEx.run("MATCH (n) RETURN n")
+  ```
+
 ## [0.1.3] - 2025-09-12
 
 ### Fixed
+
 - **External Application Integration**: Fixed critical child specification format issue that prevented neo4j_ex from working correctly when used as a dependency in external applications.
   - Changed child spec from `{Neo4j.Driver, {uri, opts}}` to `%{id: name, start: {Neo4j.Driver, :start_link, [uri, opts]}}`
   - This ensures the supervisor calls `start_link/2` with separate arguments instead of passing a tuple as the first argument
   - Resolves `Protocol.UndefinedError` when trying to convert tuple to string in `parse_uri/1`
 
 ### Added
+
 - **Ecto-like Configuration**: Neo4j_Ex now provides the same clean, declarative configuration experience as Ecto
 - **Comprehensive Integration Tests**: Added extensive test suite for external application integration scenarios
 - **External Application Usage Guide**: Added detailed documentation (`EXTERNAL_APP_USAGE.md`) showing how to use neo4j_ex in external applications
 - **Multiple Configuration Options**: Support for single driver, multiple drivers, and custom supervision tree configurations
 
 ### Improved
+
 - **Application Startup**: More robust application startup with better error handling for missing configurations
 - **Documentation**: Enhanced documentation with real-world usage examples and migration guides
 - **Developer Experience**: Neo4j_Ex can now be used exactly like Ecto - just add to dependencies, configure, and use
 
 ### Technical Details
+
 - Made `get_single_driver_config/0` and `build_driver_child_spec/2` public for testing
 - Enhanced child specification building to use proper supervisor child spec format
 - Added comprehensive test coverage for external app integration scenarios
@@ -34,53 +56,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.2-rc3] - 2025-09-12
 
-### Fixed 
+### Fixed
+
 - Application config fixes
 
 ## [0.1.2-rc2] - 2025-09-12
+
 ### Added
+
 - Support for **advanced Neo4j data types** (datetime, temporal and spatial).
 - **Streaming query results** for efficient handling of large datasets.
 - **Connection pooling** for better concurrency and resource management.
 
-
 ## [0.1.2-rc1] - 2025-0-11
 
 ### Fixed
+
 - **Message Buffering Issues**: Fixed critical bug where multiple Bolt protocol messages arriving in a single network packet were not properly handled, causing timeouts in both session queries and transactions. Implemented proper message buffering system using process dictionary to maintain unprocessed data between message receives.
 - **Transaction Result Handling**: Fixed transaction result format to properly wrap results in `{:ok, result}` tuples for successful transactions, matching expected API contract.
 - **Session and Transaction Compatibility**: Both session and transaction modules now properly handle the Bolt protocol's message sequencing, resolving timeout issues that prevented successful query execution.
 
 ### Improved
+
 - **Robust Message Processing**: Enhanced message handling to properly process all messages in network packets, not just the first one, ensuring reliable communication with Neo4j server.
 - **Resource Management**: Added proper cleanup of message buffers when operations complete or fail, preventing memory leaks.
 
 ### Technical Details
+
 - Implemented message buffering system in `Neo4j.Session` and `Neo4j.Transaction` modules
 - Modified `receive_message/3` functions to maintain per-socket message buffers using `:erlang.get/1` and `:erlang.put/2`
 - Enhanced message decoding to properly handle remaining data after successful message parsing
 - Fixed transaction result wrapping to return `{:ok, result}` format
 - Updated result structures to use proper `Neo4j.Result.Record` and `Neo4j.Result.Summary` structs
 
-
 ## [0.1.1] - 2025-09-11
 
 ### Fixed
+
 - **Authentication Timeout Issues**: Fixed hardcoded 5-second timeout in `receive_message/3` function that was causing authentication failures. Increased timeout to 15 seconds to match connection timeout settings.
 - **Compiler Warnings**: Removed all compiler warnings by cleaning up unused module attributes in PackStream module and unused variables in test files.
 - **Result Handling**: Enhanced session result processing to properly handle field names from RUN response metadata, providing user-friendly map results instead of complex Record structures.
 
 ### Improved
+
 - **Error Handling**: Better timeout handling throughout the driver with more descriptive error messages.
 - **Documentation**: Added beta release badge and comprehensive documentation of current limitations including lack of streaming support.
 - **Test Suite**: All 29 tests now pass without any warnings, providing a clean development experience.
 
 ### Added
+
 - **Beta Release Documentation**: Added clear beta status indicators and roadmap for future versions.
 - **Limitations Documentation**: Documented current limitations including no streaming support, single connection per session, and basic type support.
 - **Version Roadmap**: Added detailed roadmap with specific features planned for v0.2.0 (streaming), v0.3.0 (connection pooling), v0.4.0 (clustering), and v1.0.0 (production readiness).
 
 ### Technical Details
+
 - Driver timeout increased from 5s to 15s for better reliability
 - Session module now properly extracts and maps field names from query responses
 - PackStream module cleaned up unused binary markers (reserved for future use)

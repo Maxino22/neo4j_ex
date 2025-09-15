@@ -30,7 +30,7 @@ Add `neo4j_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:neo4j_ex, "~> 0.1.3"}
+    {:neo4j_ex, "~> 0.1.4"}
   ]
 end
 ```
@@ -42,6 +42,59 @@ mix deps.get
 ```
 
 ## Quick Start
+
+### With Application Configuration (Recommended)
+
+Configure your default driver in `config/config.exs`:
+
+```elixir
+# config/config.exs
+config :neo4j_ex,
+  uri: "bolt://localhost:7687",
+  auth: {"neo4j", "password"}
+```
+
+Add Neo4j.Application to your supervision tree:
+
+```elixir
+# lib/my_app/application.ex
+def start(_type, _args) do
+  children = [
+    # Other children...
+    Neo4j.Application
+  ]
+  
+  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+  Supervisor.start_link(children, opts)
+end
+```
+
+Now you can use the clean, implicit API:
+
+```elixir
+# Execute queries without passing driver explicitly
+{:ok, results} = Neo4jEx.run("MATCH (n:Person) RETURN n.name LIMIT 10")
+
+# Work with sessions using default driver
+result = Neo4jEx.session(fn session ->
+  Neo4j.Session.run(session, "CREATE (p:Person {name: $name})", %{name: "Alice"})
+end)
+
+# Use transactions with default driver
+result = Neo4jEx.transaction(fn tx ->
+  Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Bob"})
+  Neo4j.Transaction.run(tx, "CREATE (p:Person {name: $name})", %{name: "Carol"})
+end)
+
+# Stream large result sets using default driver
+Neo4jEx.stream("MATCH (n:Person) RETURN n")
+|> Stream.each(&process_record/1)
+|> Stream.run()
+```
+
+### Manual Driver Management
+
+If you prefer explicit driver management:
 
 ```elixir
 # Start a driver
@@ -211,14 +264,26 @@ Then use the named driver:
 ### Simple Queries
 
 ```elixir
-# Create nodes
+# With implicit default driver (recommended)
+{:ok, _} = Neo4jEx.run("""
+  CREATE (alice:Person {name: "Alice", age: 30})
+  CREATE (bob:Person {name: "Bob", age: 25})
+  CREATE (alice)-[:KNOWS]->(bob)
+""")
+
+# Query with parameters using default driver
+{:ok, results} = Neo4jEx.run(
+  "MATCH (p:Person {name: $name}) RETURN p",
+  %{name: "Alice"})
+
+# Or with explicit driver
 {:ok, _} = Neo4jEx.run(driver, """
   CREATE (alice:Person {name: "Alice", age: 30})
   CREATE (bob:Person {name: "Bob", age: 25})
   CREATE (alice)-[:KNOWS]->(bob)
 """)
 
-# Query with parameters
+# Query with parameters and explicit driver
 {:ok, results} = Neo4jEx.run(driver,
   "MATCH (p:Person {name: $name}) RETURN p",
   %{name: "Alice"})
@@ -228,6 +293,27 @@ for record <- results.records do
   person = Neo4j.Result.Record.get(record, "p")
   IO.inspect(person)
 end
+```
+
+### Multiple Named Drivers
+
+```elixir
+# Configure multiple drivers in config/config.exs
+config :neo4j_ex,
+  drivers: [
+    default: [
+      uri: "bolt://localhost:7687",
+      auth: {"neo4j", "password"}
+    ],
+    analytics: [
+      uri: "bolt://analytics-server:7687",
+      auth: {"neo4j", "analytics_password"}
+    ]
+  ]
+
+# Use different drivers for different purposes
+{:ok, results} = Neo4jEx.run("MATCH (n:Person) RETURN count(n)")  # Uses :default
+{:ok, results} = Neo4jEx.run(:analytics, "MATCH (n:Event) RETURN count(n)")  # Uses :analytics
 ```
 
 ### Working with Sessions
