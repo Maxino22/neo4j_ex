@@ -9,6 +9,7 @@ defmodule Neo4j.Stream do
 
   alias Neo4j.Driver
   alias Neo4j.Session
+  alias Neo4j.Registry
 
   @doc """
   Creates a stream for large result sets.
@@ -47,36 +48,46 @@ defmodule Neo4j.Stream do
       |> Enum.sum()
   """
   def run(driver, query, params \\ %{}, opts \\ []) do
-    batch_size = Keyword.get(opts, :batch_size, 1000)
-    timeout = Keyword.get(opts, :timeout, 30000)
+    with {:ok, resolved_driver} <- Registry.lookup(driver) do
+      batch_size = Keyword.get(opts, :batch_size, 1000)
+      timeout = Keyword.get(opts, :timeout, 30000)
 
-    Stream.resource(
-      fn ->
-        # Start state: {skip, continue_fetching}
-        {0, true, driver, query, params, batch_size, timeout}
-      end,
-      fn {skip, continue_fetching, driver, query, params, batch_size, timeout} ->
-        if continue_fetching do
-          case fetch_batch(driver, query, params, skip, batch_size, timeout) do
-            {:ok, records, batch_count} ->
-              new_skip = skip + batch_count
-              # Continue if we got a full batch AND there are records, stop if we got fewer records than requested
-              continue_fetching = batch_count > 0 && batch_count == batch_size
-              {records, {new_skip, continue_fetching, driver, query, params, batch_size, timeout}}
-            {:error, reason} ->
-              {:halt, reason}
+      Stream.resource(
+        fn ->
+          # Start state: {skip, continue_fetching}
+          {0, true, resolved_driver, query, params, batch_size, timeout}
+        end,
+        fn {skip, continue_fetching, resolved_driver, query, params, batch_size, timeout} ->
+          if continue_fetching do
+            case fetch_batch(resolved_driver, query, params, skip, batch_size, timeout) do
+              {:ok, records, batch_count} ->
+                new_skip = skip + batch_count
+                # Continue if we got a full batch AND there are records, stop if we got fewer records than requested
+                continue_fetching = batch_count > 0 && batch_count == batch_size
+                {records, {new_skip, continue_fetching, resolved_driver, query, params, batch_size, timeout}}
+              {:error, reason} ->
+                {:halt, reason}
+            end
+          else
+            {:halt, :done}
           end
-        else
-          {:halt, :done}
+        end,
+        fn _state ->
+          # Cleanup function - no specific cleanup needed
+          :ok
         end
-      end,
-      fn _state ->
-        # Cleanup function - no specific cleanup needed
-        :ok
-      end
-    )
-    # Flatten the batches into individual records
-    |> Stream.flat_map(& &1)
+      )
+      # Flatten the batches into individual records
+      |> Stream.flat_map(& &1)
+    else
+      {:error, reason} ->
+        # Return a stream that immediately fails
+        Stream.resource(
+          fn -> :error end,
+          fn :error -> {:halt, reason} end,
+          fn _ -> :ok end
+        )
+    end
   end
 
   @doc """
