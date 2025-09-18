@@ -643,9 +643,9 @@ Neo4jEx (Public API)
 - [x] **Week 3**: Query execution and result parsing
 - [x] **Week 4**: Polish, testing, and documentation
 - [x] **v0.2.0**: Result streaming support for large datasets
-- [ ] **v0.3.0**: Connection pooling and improved performance
-- [ ] **v0.4.0**: Clustering support and routing
-- [ ] **v1.0.0**: Advanced Neo4j types (Point, Duration, etc.) and production readiness
+- [x] **v0.3.0**: Connection pooling and improved performance
+- [x] **v0.4.0**: Clustering support and routing
+- [x] **v1.0.0**: Advanced Neo4j types (Point, Duration, etc.) and production readiness
 
 ## Contributing
 
