@@ -5,9 +5,9 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 [![Hex.pm](https://img.shields.io/hexpm/v/neo4j_ex.svg)](https://hex.pm/packages/neo4j_ex)
 [![Documentation](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/neo4j_ex)
 [![License](https://img.shields.io/hexpm/l/neo4j_ex.svg)](LICENSE)
-[![Beta](https://img.shields.io/badge/status-beta-orange.svg)](https://github.com/Maxino22/neo4j_ex)
+[![Stable](https://img.shields.io/badge/status-stable-brightgreen.svg)](https://github.com/Maxino22/neo4j_ex)
 
-> **⚠️ Beta Release**: This driver is currently in beta. While core functionality is stable and tested, some edge cases and advanced features are still being refined. Please report any issues you encounter to help us improve the driver.
+> **✔️ Stable Release**: Neo4jEx is now production-ready. Core functionality is complete, actively maintained, and tested across real-world workloads. Please report any bugs or feature requests to help us continue improving the driver.
 
 ## Features
 
