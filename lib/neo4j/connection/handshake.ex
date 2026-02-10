@@ -4,6 +4,7 @@ defmodule Neo4j.Connection.Handshake do
   Supports Bolt v5.1+ (no backwards compatibility with older versions).
   """
 
+  require Logger
   alias Neo4j.Connection.Socket
 
   # Bolt magic preamble - identifies this as Bolt protocol
@@ -14,8 +15,8 @@ defmodule Neo4j.Connection.Handshake do
   @bolt_versions [
     {5, 4},
     {5, 3},
-    {5, 2},
-    {5, 1}
+    {4, 4},
+    {4, 3}
   ]
 
   @doc """
@@ -48,12 +49,30 @@ defmodule Neo4j.Connection.Handshake do
   def receive_version(socket) do
     case Socket.recv(socket, length: 4) do
       {:ok, <<0, 0, 0, 0>>} ->
+        Logger.error("Handshake: version negotiation failed - server returned <<0, 0, 0, 0>>")
         {:error, :version_negotiation_failed}
 
       {:ok, version_bytes} ->
-        parse_version(version_bytes)
+
+
+        result = parse_version(version_bytes)
+
+        case result do
+          {:ok, version} ->
+            Logger.info(
+              "Handshake: negotiated Bolt version #{elem(version, 0)}.#{elem(version, 1)}"
+            )
+
+          {:error, reason} ->
+            Logger.error(
+              "Handshake: failed to parse version bytes: #{inspect(version_bytes, base: :hex)} - reason: #{reason}"
+            )
+        end
+
+        result
 
       {:error, reason} ->
+        Logger.error("Handshake: socket recv failed - #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -84,16 +103,32 @@ defmodule Neo4j.Connection.Handshake do
   @doc """
   Parses version bytes from server response.
   """
-  def parse_version(<<minor::8, 0::8, 0::8, major::8>>) do
+  def parse_version(<<minor::8, 0::8, 0::8, major::8>> = _bytes) do
     {:ok, {major, minor}}
   end
 
-  def parse_version(<<0, 0, minor::8, major::8>>) do
+  def parse_version(<<0, 0, minor::8, major::8>> = _bytes) do
     # Handle alternative Bolt v5+ format (used by Memgraph and some other servers)
+
     {:ok, {major, minor}}
   end
 
-  def parse_version(_) do
+  def parse_version(<<major::8, minor::8, 0::8, 0::8>> = _bytes) do
+    # Handle big-endian style format (major, minor, 0, 0)
+
+    {:ok, {major, minor}}
+  end
+
+  def parse_version(<<0::8, major::8, 0::8, minor::8>> = _bytes) do
+    # Handle alternative format (0, major, 0, minor)
+    {:ok, {major, minor}}
+  end
+
+  def parse_version(bytes) do
+    Logger.error(
+      "Handshake: unrecognized version format - bytes: #{inspect(bytes, base: :hex)}, decimal: #{inspect(:binary.bin_to_list(bytes))}"
+    )
+
     {:error, :invalid_version_format}
   end
 

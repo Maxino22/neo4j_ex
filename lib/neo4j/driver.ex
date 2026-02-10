@@ -195,8 +195,6 @@ defmodule Neo4j.Driver do
 
   @impl true
   def init(config) do
-    Logger.info("Starting Neo4j driver: #{config.host}:#{config.port}")
-
     state = %{
       config: config,
       connections: [],
@@ -276,6 +274,7 @@ defmodule Neo4j.Driver do
     case String.split(rest, ":", parts: 2) do
       [host, port] ->
         %{host: host, port: String.to_integer(port)}
+
       [host] ->
         %{host: host}
     end
@@ -286,6 +285,7 @@ defmodule Neo4j.Driver do
   end
 
   defp normalize_auth(nil), do: %{}
+
   defp normalize_auth({username, password}) do
     %{
       "scheme" => "basic",
@@ -293,35 +293,45 @@ defmodule Neo4j.Driver do
       "credentials" => password
     }
   end
+
   defp normalize_auth(auth) when is_map(auth), do: auth
 
   defp create_connection(config) do
-    with {:ok, socket} <- Socket.connect(config.host, config.port, timeout: config.connection_timeout),
+    with {:ok, socket} <-
+           Socket.connect(config.host, config.port, timeout: config.connection_timeout),
          {:ok, _version} <- Handshake.perform(socket),
          :ok <- authenticate(socket, config) do
       {:ok, socket}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, reason} ->
+        Logger.error("Driver: connection failed - #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
   defp authenticate(socket, config) do
-    hello_msg = Messages.hello(config.user_agent, config.auth,
-      bolt_agent: %{
-        "product" => config.user_agent,
-        "language" => "Elixir",
-        "language_version" => System.version()
-      }
-    )
+    hello_msg =
+      Messages.hello(config.user_agent, config.auth,
+        bolt_agent: %{
+          "product" => config.user_agent,
+          "language" => "Elixir",
+          "language_version" => System.version()
+        }
+      )
 
-    with :ok <- Socket.send(socket, Messages.encode_message(hello_msg)),
+    encoded_hello = Messages.encode_message(hello_msg)
+
+    with :ok <- Socket.send(socket, encoded_hello),
          {:ok, response} <- receive_message(socket),
          {:success, _metadata} <- Messages.parse_response(response) do
       :ok
     else
       {:failure, metadata} ->
+        Logger.error("Driver: authentication failed - #{inspect(metadata)}")
         {:error, {:auth_failed, metadata["message"]}}
+
       {:error, reason} ->
+        Logger.error("Driver: authentication error - #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -334,8 +344,10 @@ defmodule Neo4j.Driver do
         case Messages.decode_message(full_data) do
           {:ok, message, _rest} ->
             {:ok, message}
+
           {:incomplete} ->
             receive_message(socket, full_data, timeout)
+
           {:error, reason} ->
             {:error, reason}
         end

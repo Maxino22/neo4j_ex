@@ -5,8 +5,8 @@ defmodule Neo4j.Protocol.Messages do
   Supports Bolt v5+ messages for authentication and query execution.
   """
 
+  require Logger
   alias Neo4j.Protocol.PackStream
-  
 
   # Message signatures (Bolt v5+)
   @hello_signature 0x01
@@ -261,11 +261,14 @@ defmodule Neo4j.Protocol.Messages do
 
   def decode_message(<<0x00, 0x00, rest::binary>>, buffer) when buffer != <<>> do
     # End of message marker found
+
     case PackStream.decode(buffer) do
       {:ok, message, <<>>} ->
         {:ok, message, rest}
+
       {:ok, _message, _leftover} ->
         {:error, :invalid_message_format}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -282,7 +285,12 @@ defmodule Neo4j.Protocol.Messages do
 
   def decode_message(<<0x00, 0x00, _rest::binary>>, <<>>) do
     # Empty message
+    Logger.warning("Messages: empty message received")
     {:error, :empty_message}
+  end
+
+  def decode_message(data, _buffer) when byte_size(data) < 2 do
+    {:incomplete}
   end
 
   def decode_message(_, _) do
@@ -302,8 +310,10 @@ defmodule Neo4j.Protocol.Messages do
     case decode_message(data) do
       {:ok, message, rest} ->
         decode_messages(rest, [message | acc])
+
       {:incomplete} ->
         {:ok, Enum.reverse(acc), data}
+
       {:error, reason} ->
         {:error, reason}
     end
