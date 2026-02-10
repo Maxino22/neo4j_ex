@@ -59,7 +59,7 @@ defmodule Neo4j.Connection.Handshake do
 
         case result do
           {:ok, version} ->
-            Logger.info(
+            Logger.debug(
               "Handshake: negotiated Bolt version #{elem(version, 0)}.#{elem(version, 1)}"
             )
 
