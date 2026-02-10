@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Memgraph Compatibility**: Fixed version parsing bug that caused `{:error, :invalid_version_format}` when connecting to Memgraph databases
+  - Issue: Version bytes `<<0, 0, 2, 5>>` from Memgraph were being incorrectly parsed as `{2, 5}` instead of `{5, 2}`
+  - Root cause: The alternative version format parser had swapped major/minor version positions
+  - Solution: Corrected variable names in `parse_version/1` to properly handle Memgraph's `<<0, 0, minor, major>>` format
+  - Neo4j compatibility unaffected (uses different format `<<minor, 0, 0, major>>`)
+
+### Improved
+
+- **Documentation**: Major improvements to README for better developer experience
+  - Added prominent "Understanding Auto-Start Behavior" section explaining automatic application startup
+  - Clarified that neo4j_ex automatically starts when included as a dependency in Phoenix/Mix apps
+  - Documented the "already started" error and how to avoid it
+  - Added Memgraph compatibility to features list
+  - Improved Quick Start section with clearer guidance for different use cases
+
+### Added
+
+- **Test Coverage**: Added comprehensive test cases for Memgraph version format parsing
+  - Tests for Neo4j format: `<<minor, 0, 0, major>>`
+  - Tests for Memgraph format: `<<0, 0, minor, major>>`
+  - Tests for invalid version formats
+
 ## [0.1.4] - 2025-09-15
 
 ### Added

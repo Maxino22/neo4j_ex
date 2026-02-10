@@ -24,4 +24,29 @@ defmodule HandshakeTest do
       assert v4 == <<1, 0, 0, 5>>  # Bolt v5.1
     end
   end
+
+  describe "version parsing" do
+    test "parses Neo4j version format correctly" do
+      # Neo4j format: <<minor, 0, 0, major>>
+      assert {:ok, {5, 4}} = Handshake.parse_version(<<4, 0, 0, 5>>)
+      assert {:ok, {5, 3}} = Handshake.parse_version(<<3, 0, 0, 5>>)
+      assert {:ok, {5, 2}} = Handshake.parse_version(<<2, 0, 0, 5>>)
+      assert {:ok, {5, 1}} = Handshake.parse_version(<<1, 0, 0, 5>>)
+    end
+
+    test "parses Memgraph/alternative version format correctly" do
+      # Memgraph format: <<0, 0, minor, major>>
+      assert {:ok, {5, 4}} = Handshake.parse_version(<<0, 0, 4, 5>>)
+      assert {:ok, {5, 3}} = Handshake.parse_version(<<0, 0, 3, 5>>)
+      assert {:ok, {5, 2}} = Handshake.parse_version(<<0, 0, 2, 5>>)
+      assert {:ok, {5, 1}} = Handshake.parse_version(<<0, 0, 1, 5>>)
+    end
+
+    test "returns error for invalid version format" do
+      # Invalid formats that don't match either Neo4j or Memgraph patterns
+      assert {:error, :invalid_version_format} = Handshake.parse_version(<<1, 2, 3, 4>>)
+      assert {:error, :invalid_version_format} = Handshake.parse_version(<<5, 0, 1, 0>>)
+      assert {:error, :invalid_version_format} = Handshake.parse_version(<<0, 1, 2, 3>>)
+    end
+  end
 end

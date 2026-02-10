@@ -88,8 +88,8 @@ defmodule Neo4j.Connection.Handshake do
     {:ok, {major, minor}}
   end
 
-  def parse_version(<<0, 0, major::8, minor::8>>) do
-    # Handle legacy format (pre-v5)
+  def parse_version(<<0, 0, minor::8, major::8>>) do
+    # Handle alternative Bolt v5+ format (used by Memgraph and some other servers)
     {:ok, {major, minor}}
   end
 

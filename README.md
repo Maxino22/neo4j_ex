@@ -12,6 +12,7 @@ A pure Elixir driver for Neo4j graph database using the Bolt protocol.
 ## Features
 
 - **Full Bolt Protocol Support**: Complete implementation of Neo4j's Bolt protocol v5.x
+- **Neo4j & Memgraph Compatible**: Works with both Neo4j and Memgraph databases
 - **Authentication**: Support for basic authentication and no-auth scenarios
 - **Connection Management**: Automatic connection handling and cleanup
 - **Query Execution**: Simple query execution with parameter support
@@ -30,7 +31,7 @@ Add `neo4j_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:neo4j_ex, "~> 0.1.4"}
+    {:neo4j_ex, "~> 0.1.5"}
   ]
 end
 ```
@@ -43,7 +44,17 @@ mix deps.get
 
 ## Quick Start
 
-### With Application Configuration (Recommended)
+### Understanding Auto-Start Behavior
+
+**Important**: Neo4jEx automatically starts when included as a dependency. This means:
+
+- ✅ **In Phoenix or Mix applications**: Just add neo4j_ex to your `deps` and configure it - it starts automatically
+- ❌ **Don't manually add** `Neo4j.Application` to your supervision tree unless you have specific needs
+- ✅ **In standalone scripts**: Use `Application.ensure_all_started(:neo4j_ex)` before making queries
+
+If you see an error like `already started: #PID<0.327.0>`, it means you're trying to start the application twice.
+
+### With Application Configuration (Recommended for Phoenix/Mix Apps)
 
 Configure your default driver in `config/config.exs`:
 
@@ -54,22 +65,7 @@ config :neo4j_ex,
   auth: {"neo4j", "password"}
 ```
 
-Add Neo4j.Application to your supervision tree:
-
-```elixir
-# lib/my_app/application.ex
-def start(_type, _args) do
-  children = [
-    # Other children...
-    Neo4j.Application
-  ]
-  
-  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
-  Supervisor.start_link(children, opts)
-end
-```
-
-Now you can use the clean, implicit API:
+**That's it!** Neo4jEx will automatically start with your application. You can now use the clean, implicit API:
 
 ```elixir
 # Execute queries without passing driver explicitly
