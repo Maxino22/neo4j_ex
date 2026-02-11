@@ -653,7 +653,7 @@ Neo4jEx (Public API)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/Maxino22/neo4j_ex/blob/main/LICENSE) file for details.
 
 ## Acknowledgments
 
