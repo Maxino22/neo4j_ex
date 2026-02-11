@@ -19,6 +19,7 @@ defmodule Neo4j.Session do
       Neo4j.Session.close(session)
   """
 
+  alias Neo4j.Result.Summary
   alias Neo4j.Connection.Socket
   alias Neo4j.Protocol.Messages
   alias Neo4j.Result.Record
@@ -59,15 +60,16 @@ defmodule Neo4j.Session do
          {:success, metadata} <- Messages.parse_response(run_response) do
 
       # Send PULL message
+      fields = Map.get(metadata, "fields", [])
       pull_msg = Messages.pull(%{"n" => -1})
       encoded_pull = Messages.encode_message(pull_msg)
 
       with :ok <- Socket.send(session.socket, encoded_pull),
-           {:ok, records} <- collect_results(session.socket, timeout, metadata["fields"]) do
+           {:ok, results} <- collect_results(session.socket, timeout, fields) do
         # Clear the buffer when done
         :erlang.erase({:message_buffer, session.socket})
         # Return results in the expected format
-        {:ok, %{records: records}}
+        {:ok, results }
       else
         {:error, reason} ->
           # Clear the buffer on error
@@ -199,9 +201,16 @@ defmodule Neo4j.Session do
             record = Record.new(values, fields)
             collect_results(socket, timeout, fields, [record | acc])
 
-          {:success, _metadata} ->
+          {:success, metadata} ->
+            summary = Summary.new(metadata)
+
+            results = %{
+              records: Enum.reverse(acc),
+              summary: summary
+            }
+
             # Return just the list of record structs
-            {:ok, Enum.reverse(acc)}
+            {:ok, results}
 
           {:failure, metadata} ->
             {:error, {:query_execution_failed, metadata["message"]}}

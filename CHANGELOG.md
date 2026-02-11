@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8]
+
+### Added
+
+- Full query summary support, including detailed profiled execution plans for `PROFILE` queries (DB hits, rows, operator tree, ASCII table string)
+- Summary now includes notifications, counters, plan/profile metadata
+
 ## [0.1.7] - 2026-02-10
 
 ### Fixed
 
 - **Memgraph Compatibility**: Fixed version parsing bug that caused `{:error, :invalid_version_format}` when connecting to Memgraph databases
-
 
 ### Improved
 
@@ -20,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documented the "already started" error and how to avoid it
   - Added Memgraph compatibility to features list
   - Improved Quick Start section with clearer guidance for different use cases
-
 
 ## [0.1.4] - 2025-09-15
 
