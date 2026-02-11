@@ -53,15 +53,11 @@ defmodule Neo4j.Connection.Handshake do
         {:error, :version_negotiation_failed}
 
       {:ok, version_bytes} ->
-
-
         result = parse_version(version_bytes)
 
         case result do
           {:ok, version} ->
-            Logger.debug(
-              "Handshake: negotiated Bolt version #{elem(version, 0)}.#{elem(version, 1)}"
-            )
+            {:ok, version}
 
           {:error, reason} ->
             Logger.error(

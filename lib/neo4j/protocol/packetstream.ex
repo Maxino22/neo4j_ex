@@ -405,7 +405,17 @@ defmodule Neo4j.Protocol.PackStream do
   end
 
   defp convert_neo4j_struct(0x46, fields) do
-    # DateTime structure (signature 0x46 = 70)
+    # DateTime structure with named timezone (signature 0x46 = 70)
+    Neo4j.Types.decode_datetime(fields)
+  end
+
+  defp convert_neo4j_struct(0x49, fields) do
+    # DateTime structure with timezone offset (signature 0x49 = 73)
+    Neo4j.Types.decode_datetime(fields)
+  end
+
+  defp convert_neo4j_struct(0x69, fields) do
+    # DateTime structure with named timezone - alternative signature (signature 0x69 = 105)
     Neo4j.Types.decode_datetime(fields)
   end
 

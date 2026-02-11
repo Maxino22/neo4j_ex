@@ -488,8 +488,35 @@ defmodule Neo4j.Types do
 
       datetime = Neo4j.Types.decode_datetime([1705320645, 123456789, "America/New_York"])
   """
-  def decode_datetime([epoch_seconds, nanosecond, timezone_id]) do
+  def decode_datetime([epoch_seconds, nanosecond, timezone_id]) when is_binary(timezone_id) do
     datetime = DateTime.from_unix!(epoch_seconds)
+
+    %Neo4jDateTime{
+      year: datetime.year,
+      month: datetime.month,
+      day: datetime.day,
+      hour: datetime.hour,
+      minute: datetime.minute,
+      second: datetime.second,
+      nanosecond: nanosecond,
+      timezone_id: timezone_id
+    }
+  end
+
+  # Decode datetime with timezone offset (signature 0x49)
+  def decode_datetime([epoch_seconds, nanosecond, timezone_offset_seconds]) when is_integer(timezone_offset_seconds) do
+    datetime = DateTime.from_unix!(epoch_seconds)
+
+    # Convert timezone offset seconds to timezone string format (e.g., "+00:00")
+    offset_hours = div(timezone_offset_seconds, 3600)
+    offset_minutes = div(rem(abs(timezone_offset_seconds), 3600), 60)
+
+    timezone_id =
+      if timezone_offset_seconds >= 0 do
+        "+#{String.pad_leading(Integer.to_string(offset_hours), 2, "0")}:#{String.pad_leading(Integer.to_string(offset_minutes), 2, "0")}"
+      else
+        "-#{String.pad_leading(Integer.to_string(abs(offset_hours)), 2, "0")}:#{String.pad_leading(Integer.to_string(offset_minutes), 2, "0")}"
+      end
 
     %Neo4jDateTime{
       year: datetime.year,
