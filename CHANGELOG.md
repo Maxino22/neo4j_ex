@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Full temporal type decoding support** in query results
-  - Updated `Neo4j.Protocol.PackStream.convert_neo4j_struct/2` to handle offset-based DateTime (signature 0x49)
-  - Improved `Neo4j.Types.decode_datetime/1` to gracefully handle both named and offset timezones
+  - Updated Neo4j.Protocol.PackStream.convert_neo4j_struct/2 to handle offset-based DateTime (signature 0x49)
+  - Improved Neo4j.Types.decode_datetime/1 to gracefully handle both named and offset timezones
 
 
 
